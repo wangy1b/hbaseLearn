@@ -1689,18 +1689,105 @@ hbase> scan ‘hbase_book’
 
 ## BulkLoad 
 
-HBase 有好几种方法将数据装载到表。最直接的方式即可以通过MapReduce任务，也可以通过普通客户端API。但是这都不是高效方法。
+### 原理
 
 批量装载特性采用 MapReduce 任务，将表数据输出为HBase的内部数据格式，然后可以将产生的存储文件直接装载到运行的集群中。批量装载比简单使用 HBase API 消耗更少的CPU和网络资源。
 
-HBase 批量装载过程包含两个主要步骤。
+#### 1.加载数据到HBase的三种方法：
 
-1.通过MapReduce 任务准备数据
+- 通过MR job，使用TableOutputFormat加载到表中。（效率较低）
+  核心的原理还是使用htable的put方法，不过由于使用了mapreduce分布式提交到hbase，速度比单线程效率高出许多。
+- 通过客户端API，写入表中。（效率较低）
+- 通过Bulk load 运行MR job将数据输出为hbase内部格式，再加载数据到集群。（使用更少的CPU和网络资源）
 
-2.采用completebulkload 工具导入准备的数据
+#### 2.Bulk load两步走
 
-~~~ shell
-hadoop jar hbase-VERSION.jar completebulkload [-c /path/to/hbase/config/hbase-site.xml] /user/todd/myoutput mytable
-~~~
+- 生成HFile
+
+  - 命令行
+
+    ~~~ shell
+    # 生成hfile
+    hadoop jar hbase-version.jar importtsv -Dimporttsv.columns=HBASE_ROW_KEY,c1,c2 -Dimporttsv.bulk.output=tmp
+    hbase_table hdfs_file
+    # 导入hbase
+    hadoop jar hbase-version.jar completebulkload /user/hadoop/tmp/cf hbase_table
+    ~~~
+
+  - 代码
+
+    通过MR job，使用HFileOutputFormat2，生成StoreFiles。
+    每一个输出的HFile 文件，都在一个单独的region内，所以需要使用TotalOrderPartitioner 进行分区。
+    保证map任务的输出为相互不交叉的主键空间范围，也就是对应hbase中region里的主键范围。
+
+- 完成文件加载，将数据导入hbase集群中。
+  完成数据加载有两种方式：
+
+  - 命令行---completebulkload 
+
+  ~~~ shell
+  hadoop jar hbase-VERSION.jar completebulkload [-c /path/to/hbase/config/hbase-site.xml] /user/todd/myoutput mytable
+  ~~~
+
+  - 命令行---LoadIncrementalHFiles
+
+  ~~~ shell
+  hbase org.apache.hadoop.hbase.mapreduce.LoadIncrementalHFiles HDFS_Dir_Path HBase_table_name
+  ~~~
+
+  - 代码---通过HFileOutputFormat2 类编写 MapReduce 程序来生成 HFile 。
+    案例1：https://github.com/jrkinley/hbase-bulk-import-example
+    案例2：https://www.cnblogs.com/smartloli/p/9501887.html
+
+  - 代码---Spark bulk load：Using thin record bulk load.
+    案例1：（Hbase官网文档）Chapter 110 Bulk Load
+
+
+
+### 测试
+
+使用mr生成的HFile，加载的时候出现问题：
 
 具体见项目中 GenerateHFileForBulkLoad 
+
+代码测试，遇到报错
+
+~~~ shell
+2021-08-09 15:19:33,957 ERROR [main] tool.LoadIncrementalHFiles: -------------------------------------------------
+Bulk load aborted with some files not yet loaded:
+-------------------------------------------------
+  file:/C:/Users/32006/Desktop/test/hbase/output/info/d3303af77b7c4ca1a9b2652bc8d515fd
+
+Exception in thread "main" java.io.IOException: Retry attempted 20 times without completing, bailing out
+	at org.apache.hadoop.hbase.tool.LoadIncrementalHFiles.performBulkLoad(LoadIncrementalHFiles.java:444)
+	at org.apache.hadoop.hbase.tool.LoadIncrementalHFiles.doBulkLoad(LoadIncrementalHFiles.java:367)
+	at org.apache.hadoop.hbase.tool.LoadIncrementalHFiles.doBulkLoad(LoadIncrementalHFiles.java:281)
+	at com.wyb.GenerateHFileForBulkLoad.main(GenerateHFileForBulkLoad.java:108)
+~~~
+
+猜测应该是本地的hbase在docker里，考虑到Bulkload实质是将产生的存储文件直接装载到运行的集群中，idea 运行的程序应该不能完成数据的移动到docker，毕竟就开了几个端口
+
+拿到docker里面用命令行执行一下：
+
+~~~ shell
+# 同步本地文件到docker
+docker cp C:\Users\32006\Desktop\test\hbase\output myhbase:/
+# 进入docker 查看文件
+ls /output/
+_SUCCESS  info
+# 执行 LoadIncrementalHFiles 命令
+hbase org.apache.hadoop.hbase.mapreduce.LoadIncrementalHFiles /output bulkload
+# 无报错，查看一下hbase下对应的表 bulkload
+hbase(main):021:0> scan 'bulkload'
+ROW                             COLUMN+CELL
+ 1                              column=info:www.baidu.com, timestamp=1628493572491, value=baidu
+ 2                              column=info:www.huawei.com, timestamp=1628493572491, value=huawei
+ 3                              column=info:www.jd.com, timestamp=1628493572491, value=jd
+ 4                              column=info:www.taobao.com, timestamp=1628493572491, value=taobao
+ 5                              column=info:www.alibaba.com, timestamp=1628493572491, value=alibaba
+5 row(s)
+Took 0.5542 seconds
+
+# docker 环境没有hadoop 就不测试completebulkload 
+~~~
+

@@ -10,8 +10,8 @@
 
     <properties>
         <hbase.version>2.3.3</hbase.version>
-        <!--<hadoop.version>3.1.1</hadoop.version>-->
-        <hadoop.version>2.7.4</hadoop.version>
+        <hadoop.version>3.1.1</hadoop.version>
+        <!--<hadoop.version>2.7.4</hadoop.version>-->
         <project.build.sourceEncoding>
             UTF-8
         </project.build.sourceEncoding>
@@ -21,15 +21,20 @@
 
     <dependencies>
         <dependency>
+            <groupId>org.apache.hadoop</groupId>
+            <artifactId>hadoop-client</artifactId>
+            <version>${hadoop.version}</version>
+        </dependency>
+        <dependency>
             <groupId>org.apache.hbase</groupId>
             <artifactId>hbase-client</artifactId>
             <version>${hbase.version}</version>
         </dependency>
-        <!--<dependency>-->
-            <!--<groupId>org.apache.hbase</groupId>-->
-            <!--<artifactId>hbase-common</artifactId>-->
-            <!--<version>${hbase.version}</version>-->
-        <!--</dependency>-->
+        <dependency>
+            <groupId>org.apache.hbase</groupId>
+            <artifactId>hbase-common</artifactId>
+            <version>${hbase.version}</version>
+        </dependency>
         <dependency>
             <groupId>org.apache.hbase</groupId>
             <artifactId>hbase-server</artifactId>
@@ -40,11 +45,6 @@
             <groupId>org.apache.hbase</groupId>
             <artifactId>hbase-mapreduce</artifactId>
             <version>${hbase.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>org.apache.hadoop</groupId>
-            <artifactId>hadoop-client</artifactId>
-            <version>${hadoop.version}</version>
         </dependency>
     </dependencies>
 

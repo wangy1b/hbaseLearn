@@ -6,11 +6,7 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hbase.HBaseConfiguration;
 import org.apache.hadoop.hbase.TableName;
-import org.apache.hadoop.hbase.client.Admin;
-import org.apache.hadoop.hbase.client.Connection;
-import org.apache.hadoop.hbase.client.ConnectionFactory;
-import org.apache.hadoop.hbase.client.Put;
-import org.apache.hadoop.hbase.client.Table;
+import org.apache.hadoop.hbase.client.*;
 import org.apache.hadoop.hbase.io.ImmutableBytesWritable;
 import org.apache.hadoop.hbase.mapreduce.HFileOutputFormat2;
 import org.apache.hadoop.hbase.mapreduce.LoadIncrementalHFiles;
@@ -47,12 +43,14 @@ public class GenerateHFileForBulkLoad {
             String Qualifier = Lines[1].split(":")[1];
             String ColValue = Lines[2];
 
-            System.out.println(Rowkey + " -> " + ColumnFamily + " -> " + Qualifier + " -> " + ColValue);
+            String str = Rowkey + " -> " + ColumnFamily + " -> " + Qualifier + " -> " + ColValue;
+            System.out.println(str);
             //拼装rowkey和put
             ImmutableBytesWritable PutRowkey = new ImmutableBytesWritable(Rowkey.getBytes());
             Put put = new Put(Rowkey.getBytes());
             put.addColumn(ColumnFamily.getBytes(), Qualifier.getBytes(), ColValue.getBytes());
 
+            System.out.println(put.toJSON());
             context.write(PutRowkey, put);
         }
 
@@ -71,7 +69,7 @@ public class GenerateHFileForBulkLoad {
         HBaseUtils.createTable(target_hbase_table, target_hbase_table_column_family);
         Admin admin = HBaseUtils.admin;
 
-        final String InputFile = "src/main/resources/input.txt";
+        final String InputFile = "./src/main/resources/input.txt";
         final String OutputFile = "C:\\Users\\32006\\Desktop\\test\\hbase\\output";
         final Path OutputPath = new Path(OutputFile);
 
@@ -95,17 +93,18 @@ public class GenerateHFileForBulkLoad {
         FileOutputFormat.setOutputPath(job, OutputPath);
 
         //配置MapReduce作业，以执行增量加载到给定表中。
-        HFileOutputFormat2.configureIncrementalLoad(job,
-                conn.getTable(TableName.valueOf(target_hbase_table)),
-                conn.getRegionLocator(TableName.valueOf(target_hbase_table)));
+        Table table = conn.getTable(TableName.valueOf(target_hbase_table));
+        RegionLocator regionLocator = table.getRegionLocator();
+        HFileOutputFormat2.configureIncrementalLoad(job, table, regionLocator);
 
+        job.waitForCompletion(true);
+
+        // hbase org.apache.hadoop.hbase.mapreduce.LoadIncrementalHFiles /output bulkload
         //MapReduce作业完成，告知RegionServers在哪里找到这些文件,将文件加载到HBase中
         if (job.waitForCompletion(true)) {
             System.out.println("Finished generateHFile");
             LoadIncrementalHFiles Loader = new LoadIncrementalHFiles(conf);
-            Loader.doBulkLoad(OutputPath, admin,
-                    conn.getTable(TableName.valueOf(target_hbase_table)),
-                    conn.getRegionLocator(TableName.valueOf(target_hbase_table)));
+            Loader.doBulkLoad(OutputPath, admin, table, regionLocator);
         }
     }
 }
