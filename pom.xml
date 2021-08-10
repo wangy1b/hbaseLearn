@@ -11,7 +11,9 @@
     <properties>
         <hbase.version>2.3.3</hbase.version>
         <hadoop.version>3.1.1</hadoop.version>
-        <!--<hadoop.version>2.7.4</hadoop.version>-->
+        <spark.version>2.3.0</spark.version>
+        <scala.version>2.11</scala.version>
+        <hbase-spark.version>1.0.0</hbase-spark.version>
         <project.build.sourceEncoding>
             UTF-8
         </project.build.sourceEncoding>
@@ -45,6 +47,32 @@
             <groupId>org.apache.hbase</groupId>
             <artifactId>hbase-mapreduce</artifactId>
             <version>${hbase.version}</version>
+        </dependency>
+        <!--https://mvnrepository.com/artifact/org.apache.hbase.connectors.spark/hbase-spark -->
+        <dependency>
+            <groupId>org.apache.hbase.connectors.spark</groupId>
+            <artifactId>hbase-spark</artifactId>
+            <version>${hbase-spark.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.hbase</groupId>
+            <artifactId>hbase-thrift</artifactId>
+            <version>${hbase.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.spark</groupId>
+            <artifactId>spark-sql_${scala.version}</artifactId>
+            <version>${spark.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.spark</groupId>
+            <artifactId>spark-core_${scala.version}</artifactId>
+            <version>${spark.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.spark</groupId>
+            <artifactId>spark-streaming_${scala.version}</artifactId>
+            <version>${spark.version}</version>
         </dependency>
     </dependencies>
 
